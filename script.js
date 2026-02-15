@@ -23,6 +23,7 @@ function start() {
 }
 
 function finish() {
+  debugger;
   gameRound++;
   clearInterval(interval);
   testWrapper.style.borderColor = "green";
@@ -35,7 +36,8 @@ function calcResults() {
   const WPS = (textEntered.length / 5 / (timer[3] / TIMER_INTERVAL)).toFixed(2);
   const correctChars = textEntered.length - errorsCount;
   const accuracy = ((correctChars / textEntered.length) * 100).toFixed(2);
-  const wpm = (CS_PER_MINUTE * correctChars) / timer[3] / 5;
+  const wpm = ((CS_PER_MINUTE * correctChars) / timer[3] / 5).toFixed(2);
+
   if (timer[3] === 0 || textEntered.length === 0)
     return {
       wpm: 0,
@@ -61,8 +63,8 @@ function updateResultTable() {
   var row = `<tr>
                 <td>${result.gameRound}</td>
                 <td>${result.errors}</td>
-                <td>${result.wpm}</td>
                 <td>${result.accuracy}%</td>
+                <td>${result.wpm}</td>
                 <td>${result.WPS}</td>
               </tr>`;
   resultTable.innerHTML += row;
@@ -126,5 +128,3 @@ function runTimer() {
 testArea.addEventListener("keypress", start);
 testArea.addEventListener("keyup", spellCheck);
 resetButton.addEventListener("click", reset);
-
-const number = (one, two) => one + two;
