@@ -1,130 +1,140 @@
-const theTimer = document.querySelector(".timer");
-const testArea = document.querySelector("#test-area");
-const originText = document.querySelector("#origin-text p").innerHTML;
-const resetButton = document.querySelector("#reset");
-const testWrapper = document.querySelector(".test-wrapper");
-const resultTable = document.querySelector("#result-table");
+'use strict';
 
-const CS_PER_MINUTE = 6000;
-const TIMER_INTERVAL = 10;
-var timer = [0, 0, 0, 0];
-var timerRunning = false;
-var interval;
-var errorsCount = 0;
-let lastTextLength = 0;
-var gameRound = 0;
+const timerElement = document.querySelector('.timer');
+const testInput = document.querySelector('#test-input');
+const originText = document.querySelector('#origin-text').textContent.trim();
+const resetButton = document.querySelector('#reset');
+const testWrapper = document.querySelector('.test-wrapper');
+const resultTableBody = document.querySelector('#result-table tbody');
 
-function start() {
-  let textEnteredLength = testArea.value.length;
-  if (textEnteredLength == 0 && !timerRunning) {
-    timerRunning = true;
-    interval = setInterval(runTimer, TIMER_INTERVAL);
-  }
+const TIMER_INTERVAL_MS = 10;
+const CENTISECONDS_PER_SECOND = 100;
+const SECONDS_PER_MINUTE = 60;
+const AVERAGE_WORD_LENGTH = 5;
+
+const game = {
+  round: 0,
+  elapsedCentiseconds: 0,
+  intervalId: null,
+  isRunning: false,
+  isFinished: false,
+};
+
+function formatTime(totalCentiseconds) {
+  const minutes = Math.floor(totalCentiseconds / (CENTISECONDS_PER_SECOND * SECONDS_PER_MINUTE));
+  const seconds = Math.floor((totalCentiseconds / CENTISECONDS_PER_SECOND) % SECONDS_PER_MINUTE);
+  const centiseconds = totalCentiseconds % CENTISECONDS_PER_SECOND;
+
+  return [minutes, seconds, centiseconds]
+    .map((value) => String(value).padStart(2, '0'))
+    .join(':');
 }
 
-function finish() {
-  debugger;
-  gameRound++;
-  clearInterval(interval);
-  testWrapper.style.borderColor = "green";
-  updateResultTable();
+function renderTimer() {
+  timerElement.textContent = formatTime(game.elapsedCentiseconds);
 }
 
-function calcResults() {
-  let textEntered = testArea.value;
-  const secPerWord = (timer[3] / 100 / (textEntered.length / 5)).toFixed(2);
-  const WPS = (textEntered.length / 5 / (timer[3] / TIMER_INTERVAL)).toFixed(2);
-  const correctChars = textEntered.length - errorsCount;
-  const accuracy = ((correctChars / textEntered.length) * 100).toFixed(2);
-  const wpm = ((CS_PER_MINUTE * correctChars) / timer[3] / 5).toFixed(2);
+function startTimer() {
+  if (game.isRunning || game.isFinished) return;
 
-  if (timer[3] === 0 || textEntered.length === 0)
-    return {
-      wpm: 0,
-      secPerWord: 0,
-      WPS: 0,
-      accuracy: 0,
-      errors: errorsCount,
-      gameRound,
-    };
-  else
-    return {
-      wpm,
-      secPerWord,
-      WPS,
-      accuracy,
-      errors: errorsCount,
-      gameRound,
-    };
+  game.isRunning = true;
+  game.intervalId = window.setInterval(() => {
+    game.elapsedCentiseconds += 1;
+    renderTimer();
+  }, TIMER_INTERVAL_MS);
 }
 
-function updateResultTable() {
-  const result = calcResults();
-  var row = `<tr>
-                <td>${result.gameRound}</td>
-                <td>${result.errors}</td>
-                <td>${result.accuracy}%</td>
-                <td>${result.wpm}</td>
-                <td>${result.WPS}</td>
-              </tr>`;
-  resultTable.innerHTML += row;
+function stopTimer() {
+  window.clearInterval(game.intervalId);
+  game.intervalId = null;
+  game.isRunning = false;
 }
 
-function reset() {
-  clearInterval(interval);
-  interval = null;
-  timer = [0, 0, 0, 0];
-  timerRunning = false;
-  testArea.value = "";
-  lastTextLength = 0;
-  theTimer.innerHTML = "00:00:00";
-  testWrapper.style.borderColor = "grey";
-  errorsCount = 0;
+function countErrors(text) {
+  return [...text].reduce((errors, character, index) => {
+    return character === originText[index] ? errors : errors + 1;
+  }, 0);
 }
 
-function spellCheck() {
-  let textEntered = testArea.value;
-  const isFinished = textEntered === originText;
+function calculateResults() {
+  const typedText = testInput.value;
+  const typedCharacters = typedText.length;
+  const elapsedSeconds = game.elapsedCentiseconds / CENTISECONDS_PER_SECOND;
+  const words = typedCharacters / AVERAGE_WORD_LENGTH;
+  const errors = countErrors(typedText);
+  const correctCharacters = Math.max(typedCharacters - errors, 0);
+  const accuracy = typedCharacters === 0 ? 0 : (correctCharacters / typedCharacters) * 100;
+  const wordsPerSecond = elapsedSeconds === 0 ? 0 : words / elapsedSeconds;
+  const wordsPerMinute = wordsPerSecond * SECONDS_PER_MINUTE;
 
-  if (isFinished) {
-    finish();
+  return {
+    round: game.round,
+    errors,
+    accuracy: accuracy.toFixed(2),
+    wpm: wordsPerMinute.toFixed(2),
+    wps: wordsPerSecond.toFixed(2),
+  };
+}
+
+function appendResultRow() {
+  const result = calculateResults();
+  const row = document.createElement('tr');
+
+  row.innerHTML = `
+    <td>${result.round}</td>
+    <td>${result.errors}</td>
+    <td>${result.accuracy}%</td>
+    <td>${result.wpm}</td>
+    <td>${result.wps}</td>
+  `;
+
+  resultTableBody.append(row);
+}
+
+function finishTest() {
+  if (game.isFinished) return;
+
+  game.round += 1;
+  game.isFinished = true;
+  stopTimer();
+  testInput.disabled = true;
+  testWrapper.dataset.state = 'success';
+  appendResultRow();
+}
+
+function updateTypingState() {
+  const typedText = testInput.value;
+
+  if (!typedText) {
+    testWrapper.dataset.state = 'idle';
     return;
   }
 
-  const isCorrectSoFar =
-    textEntered === originText.substring(0, textEntered.length);
-  if (isCorrectSoFar) testWrapper.style.borderColor = "yellow";
-  else {
-    testWrapper.style.borderColor = "red";
-
-    const isError =
-      textEntered.length > lastTextLength &&
-      textEntered[textEntered.length - 1] != " ";
-    if (isError) errorsCount++;
+  if (typedText === originText) {
+    finishTest();
+    return;
   }
 
-  lastTextLength = textEntered.length;
+  const isCorrectSoFar = originText.startsWith(typedText);
+  testWrapper.dataset.state = isCorrectSoFar ? 'active' : 'error';
 }
 
-function runTimer() {
-  const leadingZero = (t) => (t <= 9 ? "0" + t : t);
-
-  let currentTime =
-    leadingZero(timer[0]) +
-    ":" +
-    leadingZero(timer[1]) +
-    ":" +
-    leadingZero(timer[2]);
-
-  theTimer.innerHTML = currentTime;
-
-  timer[3]++;
-
-  timer[0] = Math.floor(timer[3] / 100 / 60);
-  timer[1] = Math.floor(timer[3] / 100) - timer[0] * 60;
-  timer[2] = Math.floor(timer[3] - timer[1] * 100 - timer[0] * 6000);
+function handleInput() {
+  if (testInput.value.length > 0) startTimer();
+  updateTypingState();
 }
 
-testArea.addEventListener("keypress", start);
-testArea.addEventListener("keyup", spellCheck);
-resetButton.addEventListener("click", reset);
+function resetTest() {
+  stopTimer();
+  game.elapsedCentiseconds = 0;
+  game.isFinished = false;
+  testInput.disabled = false;
+  testInput.value = '';
+  testWrapper.dataset.state = 'idle';
+  renderTimer();
+  testInput.focus();
+}
+
+testInput.addEventListener('input', handleInput);
+resetButton.addEventListener('click', resetTest);
+renderTimer();
